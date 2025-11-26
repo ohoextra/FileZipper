@@ -9,34 +9,59 @@ public static class CompressionEndpoints
     {
         var group = app.MapGroup("/api/compression");
 
-        group.MapPost("/zip", async ([FromForm] IFormFileCollection files) =>
+        group.MapPost("/zip", async (
+            [FromForm] IFormFileCollection files,
+            [FromServices] ILogger<Program> logger, 
+            CancellationToken ct) =>
         {
-            if (files.Count == 0)
-                return Results.BadRequest("No files provided.");
-
-            using var memoryStream = new MemoryStream();
-            using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
+            if (files is null || !files.Any())
             {
-                foreach (var file in files)
+                logger.LogInformation("No files provided by the user.");
+                return Results.BadRequest("No files provided.");
+            }
+            try
+            {
+                logger.LogInformation("Starting file compression..");
+                using var memoryStream = new MemoryStream();
+                using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
                 {
-                    if (file.Length == 0 || string.IsNullOrWhiteSpace(file.FileName))
-                        continue;
+                    foreach (var file in files)
+                    {
+                        if (ct.IsCancellationRequested) 
+                        {
+                            logger.LogInformation("Zipping operation was cancelled by the user.");
+                            return Results.StatusCode(499); // "Client Closed Request"
+                        }
 
-                    var entry = archive.CreateEntry(file.FileName);
-                    using var entryStream = entry.Open();
-                    using var fileStream = file.OpenReadStream();
-                    await fileStream.CopyToAsync(entryStream);
-                }
-            } 
+                        if (file.Length == 0 || string.IsNullOrWhiteSpace(file.FileName))
+                            continue;
 
-            memoryStream.Position = 0;
+                        var entry = archive.CreateEntry(file.FileName);
+                        using var entryStream = entry.Open();
+                        using var fileStream = file.OpenReadStream();
+                        await fileStream.CopyToAsync(entryStream, ct);
+                    }
+                } 
+                memoryStream.Position = 0;
 
-            return Results.File(
-                memoryStream.ToArray(), 
-                "application/zip", 
-                "compressed-files.zip"
-            );
+                logger.LogInformation("File compression completed successfully.");
+                return Results.File(
+                    memoryStream.ToArray(), 
+                    "application/zip", 
+                    "compressed-files_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + ".zip"
+                );  
+            }
+            catch (OperationCanceledException)
+            {
+                logger.LogInformation("Zipping operation was cancelled by the user.");
+                return Results.StatusCode(499); // 499 = "Client Closed Request"
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "An error occurred while zipping files.");
+                return Results.Problem("An unexpected error occurred while processing your files.");
+            }
         })
-        .DisableAntiforgery(); // simpler for API testing right now
+        .DisableAntiforgery();
     }
 }
