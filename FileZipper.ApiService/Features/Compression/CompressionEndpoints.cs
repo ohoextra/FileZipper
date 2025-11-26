@@ -22,18 +22,21 @@ public static class CompressionEndpoints
             try
             {
                 logger.LogInformation("Starting file compression..");
-                using var memoryStream = new MemoryStream();
+
+                // Build the ZIP archive in a MemoryStream and return the stream directly.
+                // Avoid calling ToArray() to prevent a second in-memory copy of the archive.
+                var memoryStream = new MemoryStream();
                 using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
                 {
                     foreach (var file in files)
                     {
-                        if (ct.IsCancellationRequested) 
+                        if (ct.IsCancellationRequested)
                         {
                             logger.LogInformation("Zipping operation was cancelled by the user.");
                             return Results.StatusCode(499); // "Client Closed Request"
                         }
 
-                        if (file.Length == 0 || string.IsNullOrWhiteSpace(file.FileName))
+                        if (string.IsNullOrWhiteSpace(file.FileName))
                             continue;
 
                         var entry = archive.CreateEntry(file.FileName);
@@ -41,15 +44,15 @@ public static class CompressionEndpoints
                         using var fileStream = file.OpenReadStream();
                         await fileStream.CopyToAsync(entryStream, ct);
                     }
-                } 
+                }
                 memoryStream.Position = 0;
 
                 logger.LogInformation("File compression completed successfully.");
                 return Results.File(
-                    memoryStream.ToArray(), 
-                    "application/zip", 
+                    memoryStream,
+                    "application/zip",
                     "compressed-files_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + ".zip"
-                );  
+                );
             }
             catch (OperationCanceledException)
             {

@@ -1,0 +1,97 @@
+@page "/"
+@rendermode InteractiveServer
+@inject IHttpClientFactory ClientFactory
+@inject IJSRuntime JS
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment Env
+
+<PageTitle>File Zipper</PageTitle>
+
+<h1>FileZipper</h1>
+<p>Upload files to create a zip archive.</p>
+
+<div class="card p-4" style="max-width: 500px;">
+    <div class="mb-3">
+        <label class="form-label">Select Files</label>
+        <input id="fileInput" type="file" multiple class="form-control" @onchange="LoadFiles" />
+    </div>
+
+    @if (files.Count > 0)
+    {
+        <div class="alert alert-info">
+            <strong>Selected Files (@files.Count):</strong>
+            <ul>
+                @foreach (var file in files)
+                {
+                    <li>@file.Name (@(file.Size / 1024) KB)</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <button class="btn btn-primary w-100" @onclick="UploadAndZip" disabled="@(!files.Any() || isLoading)">
+        @if (isLoading)
+        {
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <span> Zipping...</span>
+        }
+        else
+        {
+            <span>Download Zip</span>
+        }
+    </button>
+    
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger mt-3">@errorMessage</div>
+    }
+</div>
+
+@code {
+    private List<(string? Name, long Size)> files = new();
+    private bool isLoading = false;
+    private string? errorMessage;
+
+    // Limit max file size to 1000MB for safety (consider aligning with server-side limits)
+    private const long MaxFileSize = 1024L * 1024L * 1000L;
+
+    private async Task LoadFiles(ChangeEventArgs e)
+    {
+        errorMessage = null;
+        var infos = await JS.InvokeAsync<System.Text.Json.JsonElement[]>("getSelectedFileInfos", "fileInput");
+        files = infos.Select(i =>
+        {
+            var name = i.GetProperty("name").GetString() ?? string.Empty;
+            var size = i.GetProperty("size").GetInt64();
+            return ((string?)name, size);
+        }).ToList();
+    }
+
+    private async Task UploadAndZip()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            // Use browser-side upload (fetch) to avoid Blazor Server streaming limits.
+            // In Development the ApiService runs on a different port; call it directly.
+            var apiUrl = Env.IsDevelopment()
+                ? "https://localhost:7484/api/compression/zip"
+                : "/api/compression/zip";
+
+            await JS.InvokeVoidAsync("uploadFilesAndDownload", "fileInput", apiUrl);
+        }
+        catch (JSException jsEx)
+        {
+            errorMessage = jsEx.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
