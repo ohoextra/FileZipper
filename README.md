@@ -1,4 +1,4 @@
-# FileZipper API 🗜️
+# FileZipper API
 
 High performance file compression API (FileZipper) built with **.NET 9** and **.NET Aspire**.
 
