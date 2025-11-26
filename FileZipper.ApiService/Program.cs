@@ -1,4 +1,5 @@
 using FileZipper.ApiService.Features.Compression;
+using Scalar.AspNetCore; 
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +20,7 @@ app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.MapDefaultEndpoints();
