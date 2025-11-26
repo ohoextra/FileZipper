@@ -1,0 +1,16 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.0.0">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>187ebfbc-4095-45e0-93c9-960b21d47689</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FileZipper.ApiService\FileZipper.ApiService.csproj" />
+    <ProjectReference Include="..\FileZipper.Web\FileZipper.Web.csproj" />
+  </ItemGroup>
+
+</Project>
